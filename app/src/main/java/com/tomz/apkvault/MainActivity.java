@@ -359,4 +359,54 @@ public class MainActivity extends Activity {
             .setPositiveButton("OK", null)
             .show();
     }
+}         Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(
+                apkUri,
+                "application/vnd.android.package-archive"
+            );
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.setClipData(ClipData.newRawUri("APK", apkUri));
+
+            startActivity(intent);
+
+        } catch (Exception e) {
+            showError(
+                "Tidak dapat membuka installer: " +
+                (e.getMessage() == null
+                    ? e.getClass().getSimpleName()
+                    : e.getMessage())
+            );
+        }
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+
+        if (bytes < 1024L * 1024L) {
+            return String.format(
+                Locale.US, "%.2f KB", bytes / 1024.0
+            );
+        }
+
+        return String.format(
+            Locale.US, "%.2f MB",
+            bytes / (1024.0 * 1024.0)
+        );
+    }
+
+    private int dp(int value) {
+        return (int) (
+            value * getResources().getDisplayMetrics().density + 0.5f
+        );
+    }
+
+    private void showError(String message) {
+        new AlertDialog.Builder(this)
+            .setTitle("Tidak dapat melanjutkan")
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .show();
+    }
 }
