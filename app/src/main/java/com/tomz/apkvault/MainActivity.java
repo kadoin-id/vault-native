@@ -6,13 +6,11 @@ import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.graphics.Typeface;
-import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -23,16 +21,18 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
     private static final String ASSET_APK = "file.apk";
-    private File bundledApk;
 
+    private File bundledApk;
     private TextView statusText;
     private TextView detailsText;
     private Button installButton;
@@ -65,27 +65,27 @@ public class MainActivity extends Activity {
         title.setTextColor(0xFF172033);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Bundled APK installer");
+        subtitle.setText("Bundled APK Installer");
         subtitle.setTextSize(14);
         subtitle.setTextColor(0xFF64748B);
 
         statusText = new TextView(this);
-        statusText.setText("Memeriksa file APK...");
+        statusText.setText("Memeriksa APK...");
         statusText.setTextSize(15);
         statusText.setTextColor(0xFF334155);
         statusText.setPadding(0, dp(22), 0, dp(12));
 
         detailsText = new TextView(this);
+        detailsText.setText("Informasi APK akan muncul di sini.");
         detailsText.setTextSize(14);
         detailsText.setTextColor(0xFF334155);
         detailsText.setPadding(dp(14), dp(14), dp(14), dp(14));
         detailsText.setBackgroundColor(0xFFFFFFFF);
-        detailsText.setText("Informasi APK akan muncul di sini.");
 
         installButton = new Button(this);
-        installButton.setText("Periksa dan pasang APK");
+        installButton.setText("Pasang APK");
         installButton.setEnabled(false);
-        installButton.setOnClickListener(v -> inspectBundledApk());
+        installButton.setOnClickListener(v -> confirmInstallation());
 
         Button refreshButton = new Button(this);
         refreshButton.setText("Periksa ulang");
@@ -93,9 +93,9 @@ public class MainActivity extends Activity {
 
         TextView notice = new TextView(this);
         notice.setText(
-            "APK sumber: assets/file.apk\n\n" +
-            "Pemasangan dilakukan melalui pemasang Android. " +
-            "Perangkat akan meminta konfirmasi pengguna."
+            "Sumber APK: assets/file.apk\n\n" +
+            "Pemasangan menggunakan installer resmi Android. " +
+            "Konfirmasi pengguna tetap diperlukan."
         );
         notice.setTextSize(12);
         notice.setTextColor(0xFF64748B);
@@ -106,18 +106,18 @@ public class MainActivity extends Activity {
         content.addView(statusText);
         content.addView(detailsText);
 
-        LinearLayout.LayoutParams buttonParams =
-            new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            );
-        buttonParams.topMargin = dp(16);
+        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        buttonParams.topMargin = dp(12);
 
         content.addView(installButton, buttonParams);
         content.addView(refreshButton, buttonParams);
         content.addView(notice);
 
         scroll.addView(content);
+
         root.addView(scroll, new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             0,
@@ -129,26 +129,27 @@ public class MainActivity extends Activity {
 
     private void inspectBundledApk() {
         installButton.setEnabled(false);
+        bundledApk = null;
         statusText.setText("Memeriksa APK yang disertakan...");
+        detailsText.setText("Mohon tunggu.");
 
         new Thread(() -> {
-            File copiedFile = null;
-
             try {
-                copiedFile = copyBundledApk();
+                File copiedFile = copyBundledApk();
                 String hash = calculateSha256(copiedFile);
 
                 PackageInfo info = getPackageManager()
-                    .getPackageArchiveInfo(copiedFile.getAbsolutePath(), 0);
+                    .getPackageArchiveInfo(
+                        copiedFile.getAbsolutePath(), 0
+                    );
 
-                if (info == null) {
+                if (info == null || info.packageName == null) {
                     throw new IOException(
-                        "File ditemukan, tetapi bukan APK Android yang valid."
+                        "File bukan APK Android yang valid."
                     );
                 }
 
-                String packageName = info.packageName;
-                String version = "Tidak diketahui";
+                String version;
 
                 if (Build.VERSION.SDK_INT >= 28) {
                     version = String.valueOf(info.getLongVersionCode());
@@ -157,22 +158,19 @@ public class MainActivity extends Activity {
                 }
 
                 String result =
-                    "Nama file: file.apk\n\n" +
-                    "Package: " + packageName + "\n\n" +
+                    "Nama file: " + ASSET_APK + "\n\n" +
+                    "Package: " + info.packageName + "\n\n" +
                     "Versi kode: " + version + "\n\n" +
                     "Ukuran: " + formatBytes(copiedFile.length()) + "\n\n" +
                     "SHA-256:\n" + hash;
 
-                File finalFile = copiedFile;
-
                 runOnUiThread(() -> {
-                    bundledApk = finalFile;
+                    bundledApk = copiedFile;
                     detailsText.setText(result);
-                    statusText.setText("APK ditemukan dan lolos pemeriksaan dasar.");
-                    installButton.setEnabled(true);
-                    installButton.setOnClickListener(
-                        v -> confirmInstallation()
+                    statusText.setText(
+                        "APK ditemukan. Pemeriksaan dasar selesai."
                     );
+                    installButton.setEnabled(true);
                 });
 
             } catch (Exception e) {
@@ -181,13 +179,15 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     bundledApk = null;
                     detailsText.setText(
-                        message == null ? "Terjadi kesalahan." : message
+                        message == null
+                            ? e.getClass().getSimpleName()
+                            : message
                     );
-                    statusText.setText("APK belum siap digunakan.");
-                    installButton.setEnabled(false);
+                    statusText.setText("Pemeriksaan APK gagal.");
+
                     Toast.makeText(
                         MainActivity.this,
-                        "Pemeriksaan APK gagal.",
+                        "Tidak dapat membaca assets/file.apk",
                         Toast.LENGTH_LONG
                     ).show();
                 });
@@ -211,7 +211,7 @@ public class MainActivity extends Activity {
             output.flush();
         }
 
-        if (!destination.exists() || destination.length() == 0) {
+        if (!destination.isFile() || destination.length() == 0) {
             throw new IOException("File APK kosong atau gagal disalin.");
         }
 
@@ -221,7 +221,7 @@ public class MainActivity extends Activity {
     private String calculateSha256(File file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
-        try (InputStream input = new java.io.FileInputStream(file)) {
+        try (InputStream input = new FileInputStream(file)) {
             byte[] buffer = new byte[16 * 1024];
             int count;
 
@@ -233,55 +233,76 @@ public class MainActivity extends Activity {
         StringBuilder hex = new StringBuilder();
 
         for (byte b : digest.digest()) {
-            hex.append(String.format("%02x", b & 0xff));
+            hex.append(String.format(
+                Locale.US, "%02x", b & 0xff
+            ));
         }
 
         return hex.toString();
     }
 
     private void confirmInstallation() {
-        if (bundledApk == null || !bundledApk.exists()) {
-            showError("File APK tidak tersedia. Periksa ulang terlebih dahulu.");
+        if (bundledApk == null || !bundledApk.isFile()) {
+            showError("APK tidak tersedia. Tekan Periksa ulang.");
             return;
         }
 
         new AlertDialog.Builder(this)
             .setTitle("Konfirmasi pemasangan")
             .setMessage(
-                "APK yang disertakan akan dibuka menggunakan pemasang Android.\n\n" +
-                "Lanjutkan hanya jika kamu memercayai sumber APK ini."
+                "APK Vault akan membuka installer Android untuk file " +
+                ASSET_APK + ".\n\n" +
+                "Lanjutkan hanya jika kamu memercayai APK ini."
             )
             .setNegativeButton("Batal", null)
             .setPositiveButton("Lanjutkan", (dialog, which) -> {
-                if (Build.VERSION.SDK_INT >= 26 &&
-                    !getPackageManager().canRequestPackageInstalls()) {
-
-                    new AlertDialog.Builder(this)
-                        .setTitle("Izin pemasangan diperlukan")
-                        .setMessage(
-                            "Izinkan APK Vault memasang aplikasi dari sumber ini " +
-                            "pada pengaturan Android berikutnya."
-                        )
-                        .setNegativeButton("Batal", null)
-                        .setPositiveButton("Buka pengaturan", (d, w) -> {
-                            Intent settingsIntent = new Intent(
-                                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                Uri.parse("package:" + getPackageName())
-                            );
-                            startActivity(settingsIntent);
-                        })
-                        .show();
-
-                    return;
-                }
-
-                launchInstaller();
+                requestInstallPermissionOrLaunch();
             })
             .show();
     }
 
+    private void requestInstallPermissionOrLaunch() {
+        if (Build.VERSION.SDK_INT >= 26 &&
+            !getPackageManager().canRequestPackageInstalls()) {
+
+            new AlertDialog.Builder(this)
+                .setTitle("Izin pemasangan diperlukan")
+                .setMessage(
+                    "Aktifkan izin untuk mengizinkan APK Vault " +
+                    "meminta pemasangan aplikasi."
+                )
+                .setNegativeButton("Batal", null)
+                .setPositiveButton("Buka pengaturan", (dialog, which) -> {
+                    Intent settingsIntent = new Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName())
+                    );
+
+                    startActivity(settingsIntent);
+                })
+                .show();
+
+            return;
+        }
+
+        launchInstaller();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Tidak memulai pemasangan otomatis saat kembali dari pengaturan.
+        // Pengguna harus menekan tombol Pasang APK sendiri.
+    }
+
     private void launchInstaller() {
         try {
+            if (bundledApk == null || !bundledApk.isFile()) {
+                showError("File APK tidak ditemukan.");
+                return;
+            }
+
             Uri apkUri = FileProvider.getUriForFile(
                 this,
                 getPackageName() + ".fileprovider",
@@ -300,7 +321,10 @@ public class MainActivity extends Activity {
 
         } catch (Exception e) {
             showError(
-                "Tidak dapat membuka pemasang Android: " + e.getMessage()
+                "Tidak dapat membuka installer: " +
+                (e.getMessage() == null
+                    ? e.getClass().getSimpleName()
+                    : e.getMessage())
             );
         }
     }
@@ -310,19 +334,22 @@ public class MainActivity extends Activity {
             return bytes + " B";
         }
 
-        if (bytes < 1024 * 1024) {
-            return String.format("%.2f KB", bytes / 1024.0);
+        if (bytes < 1024L * 1024L) {
+            return String.format(
+                Locale.US, "%.2f KB", bytes / 1024.0
+            );
         }
 
         return String.format(
-            "%.2f MB",
+            Locale.US, "%.2f MB",
             bytes / (1024.0 * 1024.0)
         );
     }
 
     private int dp(int value) {
-        return (int) (value * getResources()
-            .getDisplayMetrics().density + 0.5f);
+        return (int) (
+            value * getResources().getDisplayMetrics().density + 0.5f
+        );
     }
 
     private void showError(String message) {
@@ -331,71 +358,5 @@ public class MainActivity extends Activity {
             .setMessage(message)
             .setPositiveButton("OK", null)
             .show();
-    }
-}
-   for (byte b : bytes) hex.append(String.format("%02x", b & 0xff));
-        return hex.toString();
-    }
-
-    private void requestInstall() {
-        if (selectedFile == null || !selectedFile.exists()) {
-            Toast.makeText(this, "Pilih APK terlebih dahulu.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-            new AlertDialog.Builder(this)
-                .setTitle("Izinkan instalasi untuk APK Vault")
-                .setMessage("Android memerlukan izin khusus agar APK Vault dapat membuka installer untuk file yang kamu pilih. Pada layar pengaturan, aktifkan izin hanya jika kamu ingin melanjutkan.")
-                .setNegativeButton("Batal", (d, w) -> d.dismiss())
-                .setPositiveButton("Buka Pengaturan", (d, w) -> {
-                    Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName()));
-                    startActivity(settings);
-                })
-                .show();
-            return;
-        }
-
-        new AlertDialog.Builder(this)
-            .setTitle("Lanjutkan instalasi?")
-            .setMessage("APK Vault akan membuka installer Android. Tinjau nama aplikasi dan izin yang diminta sebelum menekan Instal.")
-            .setNegativeButton("Batal", (d, w) -> d.dismiss())
-            .setPositiveButton("Buka Installer", (d, w) -> launchSystemInstaller())
-            .show();
-    }
-
-    private void launchSystemInstaller() {
-        try {
-            Uri apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", selectedFile);
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-        } catch (Exception e) {
-            Toast.makeText(this, "Tidak dapat membuka installer: " + safeMessage(e), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private String formatBytes(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
-    }
-
-    private String safeMessage(Exception e) {
-        String message = e.getMessage();
-        return message == null ? e.getClass().getSimpleName() : message;
-    }
-
-    private LinearLayout.LayoutParams matchWrap() {
-        return new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-    }
-
-    private int dp(int value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 }
