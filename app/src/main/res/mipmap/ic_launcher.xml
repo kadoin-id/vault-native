@@ -6,42 +6,34 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Latar belakang gelap -->
     <path
         android:fillColor="#17191D"
         android:pathData="M0,0h108v108h-108z" />
 
-    <!-- Badan brankas -->
     <path
         android:fillColor="#24282E"
         android:strokeColor="#C8CDD2"
         android:strokeWidth="3.5"
-        android:strokeLineJoin="round"
         android:pathData="M28,23 L80,23 L80,85 L28,85 Z" />
 
-    <!-- Lingkaran mekanisme kunci -->
     <path
         android:fillColor="#17191D"
         android:strokeColor="#C8CDD2"
         android:strokeWidth="3.5"
         android:pathData="M54,37 C44.6,37 37,44.6 37,54 C37,63.4 44.6,71 54,71 C63.4,71 71,63.4 71,54 C71,44.6 63.4,37 54,37 Z" />
 
-    <!-- Poros kunci -->
     <path
         android:fillColor="#C8CDD2"
         android:pathData="M51.5,51.5h5v17h-5z" />
 
-    <!-- Titik tengah -->
     <path
         android:fillColor="#C8CDD2"
         android:pathData="M54,48 C57.3,48 60,50.7 60,54 C60,57.3 57.3,60 54,60 C50.7,60 48,57.3 48,54 C48,50.7 50.7,48 54,48 Z" />
 
-    <!-- Engsel kiri -->
     <path
         android:fillColor="#C8CDD2"
         android:pathData="M21,34h4v10h-4z M21,64h4v10h-4z" />
 
-    <!-- Indikator kanan -->
     <path
         android:fillColor="#C8CDD2"
         android:pathData="M84,36h3v5h-3z M84,67h3v5h-3z" />
